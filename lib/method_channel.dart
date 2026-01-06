@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:polygonid_flutter_sdk/circuits/data/circuit_model.dart';
 import 'package:polygonid_flutter_sdk/circuits/data/circuits_to_download_param.dart';
 import 'package:polygonid_flutter_sdk/common/domain/entities/env_entity.dart';
 import 'package:wira_flutter_module/zk_gen.dart';
@@ -38,12 +39,14 @@ Future<dynamic> _handleCall(MethodCall call) async {
       try {
         CircuitsToDownloadParam? circuits;
         if (stringCircuits != '') {
-          circuits = CircuitsToDownloadParam.fromJson(jsonDecode(stringCircuits));
+          Map<String, dynamic> map = jsonDecode(stringCircuits);
+          map['circuitsWithChecksum'] = (map['circuitsWithChecksum'] as List).map((e) => CircuitModel.fromJson(e)).toList();
+          circuits = CircuitsToDownloadParam.fromJson(map);
         }
 
         final stream = _zkGenerator.downloadCircuits(circuits);
-        _zkGenerator.handleDownloadInfo(stream, (info) {
-          _channel.invokeMethod('downloadInfo', {'info': info});
+        _zkGenerator.handleDownloadInfo(stream, (status, info) {
+          _channel.invokeMethod('downloadInfo', jsonEncode({'status': status, 'info': info}));
         });
         return encodeResponse({'success': true});
       } catch (e) {
@@ -86,6 +89,22 @@ Future<dynamic> _handleCall(MethodCall call) async {
       } catch (e) {
         return encodeResponse({'success': false, 'error': e.toString()});
       }
+
+    case 'backupIdentity':
+      final args = call.arguments;
+      final String userDid = args['userDid'] ?? '';
+      final String userPk = args['userPk'] ?? '';
+      if (userDid == '' || userPk == '') {
+        return encodeResponse({'success': false, 'error': 'Missing arguments'});
+      }
+
+      try {
+        var backup = await _zkGenerator.backupIdentity(userDid, userPk);
+        return encodeResponse({'success': true, 'backup': backup});
+      } catch (e) {
+        return encodeResponse({'success': false, 'error': e.toString()});
+      }
+
     default:
       //Throw unimplemented error for unknown methods
       throw PlatformException(

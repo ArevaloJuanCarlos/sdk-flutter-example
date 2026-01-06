@@ -56,21 +56,21 @@ class ZkGenerator {
     );
   }
 
-  void handleDownloadInfo(Stream<DownloadInfo> stream, void Function(String) onInfo) {
+  void handleDownloadInfo(Stream<DownloadInfo> stream, void Function(String, String) onInfo) {
     late StreamSubscription<DownloadInfo> subscription;
 
     subscription = stream.listen((info) {
         if (info is DownloadInfoOnProgress) {
-          onInfo('Downloading: ${(info.downloaded / info.contentLength * 100).toStringAsFixed(2)} %');
+          onInfo('downloading', '${(info.downloaded / info.contentLength * 100).toStringAsFixed(2)} %');
         } else if (info is DownloadInfoOnDone) {
-          onInfo('Download completed');
+          onInfo('done', 'Download completed');
           subscription.cancel();
         } else if (info is DownloadInfoOnError) {
-          onInfo('Download error: ${info.errorMessage}');
+          onInfo('error', 'Download error: ${info.errorMessage}');
         }
       },
       cancelOnError: true,
-      onError: (error) => onInfo('Stream error occurred: $error'),
+      onError: (error) => onInfo('error', 'Stream error occurred: $error'),
     );
   }
 
@@ -96,6 +96,13 @@ class ZkGenerator {
       privateKey: pk,
       profileNonce: BigInt.from(0),
       keys: []
+    );
+  }
+
+  Future<String> backupIdentity(String did, String pk) async {
+    return await PolygonIdSdk.I.identity.backupIdentity(
+      genesisDid: did,
+      privateKey: pk,
     );
   }
 }

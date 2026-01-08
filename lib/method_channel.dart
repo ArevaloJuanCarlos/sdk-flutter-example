@@ -105,6 +105,37 @@ Future<dynamic> _handleCall(MethodCall call) async {
         return encodeResponse({'success': false, 'error': e.toString()});
       }
 
+    case 'restoreIdentity':
+      final args = call.arguments;
+      final String backup = args['backup'] ?? '';
+      final String userDid = args['userDid'] ?? '';
+      final String userPk = args['userPk'] ?? '';
+      if (backup == '' || userDid == '' || userPk == '') {
+        return encodeResponse({'success': false, 'error': 'Missing arguments'});
+      }
+
+      try {
+        await _zkGenerator.restoreIdentity(backup, userDid, userPk);
+        return encodeResponse({'success': true});
+      } catch (e) {
+        return encodeResponse({'success': false, 'error': e.toString()});
+      }
+    
+    case 'getCredentials':
+      final args = call.arguments;
+      final String userDid = args['userDid'] ?? '';
+      final String userPk = args['userPk'] ?? '';
+      if (userDid == '' || userPk == '') {
+        return encodeResponse({'success': false, 'error': 'Missing arguments'});
+      }
+
+      try {
+        var credentials = await _zkGenerator.getCredentials(userDid, userPk);
+        return encodeResponse({'success': true, 'credentials': credentials.map((e) => e.toJson()).toList()});
+      } catch (e) {
+        return encodeResponse({'success': false, 'error': e.toString()});
+      }
+
     default:
       //Throw unimplemented error for unknown methods
       throw PlatformException(

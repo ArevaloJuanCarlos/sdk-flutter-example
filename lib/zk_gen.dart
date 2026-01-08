@@ -105,4 +105,19 @@ class ZkGenerator {
       privateKey: pk,
     );
   }
+
+  Future<void> restoreIdentity(String backup, String did, String pk) async {
+    await PolygonIdSdk.I.identity.restoreIdentity(
+      genesisDid: did,
+      privateKey: pk,
+      encryptedDb: backup,
+    );
+  }
+
+  Future<List<CredentialEntity>> getCredentials(String did, String pk) async {
+    return await PolygonIdSdk.I.credential.getClaims(
+      genesisDid: did,
+      privateKey: pk,
+    );
+  }
 }

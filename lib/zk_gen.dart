@@ -10,6 +10,24 @@ import 'package:polygonid_flutter_sdk/iden3comm/domain/entities/credential/reque
 import 'package:polygonid_flutter_sdk/proof/domain/entities/download_info_entity.dart';
 import 'package:polygonid_flutter_sdk/sdk/polygon_id_sdk.dart';
 
+class _Lock {
+  Completer<void>? _completer;
+
+  Future<T> synchronized<T>(Future<T> Function() fn) async {
+    while (_completer != null) {
+      await _completer!.future;
+    }
+    _completer = Completer<void>();
+    try {
+      return await fn();
+    } finally {
+      final c = _completer!;
+      _completer = null;
+      c.complete();
+    }
+  }
+}
+
 class ZkGenerator {
   static final EnvEntity defaultEnv = EnvEntity(
     pushUrl: 'https://push-staging.polygonid.com/api/v1',
@@ -42,15 +60,26 @@ class ZkGenerator {
     ],
   );
 
+  final _lock = _Lock();
+
   ZkGenerator();
 
   Future<void> initialize(EnvEntity? env) async {
     await PolygonIdSdk.init(env: env ?? defaultEnv);
   }
 
-  Stream<DownloadInfo> downloadCircuits(
+  Future<Stream<DownloadInfo>> downloadCircuits(
     CircuitsToDownloadParam? circuitsToDownload
-  ) {
+  ) async {
+    var areDownloaded = await PolygonIdSdk.I.circuits.checkCircuits(circuitsToCheck: circuitsToDownload?.circuitsWithChecksum
+      ?? defaultCircuits.circuitsWithChecksum );
+
+    if (areDownloaded) {
+      return Stream<DownloadInfo>.fromIterable([
+        DownloadInfoOnDone(contentLength: 0, downloaded: 0)
+      ]);
+    }
+
     return PolygonIdSdk.I.circuits.initCircuitsDownloadAndGetInfoStream(
       circuitsToDownload: circuitsToDownload ?? defaultCircuits,
     );
@@ -75,49 +104,61 @@ class ZkGenerator {
   }
 
   Future<String> addIdentity() async {
-    var identityEntity = await PolygonIdSdk.I.identity.addIdentity();
-    return jsonEncode(identityEntity.toJson());
+    return _lock.synchronized(() async {
+      var identityEntity = await PolygonIdSdk.I.identity.addIdentity();
+      return jsonEncode(identityEntity.toJson());
+    });
   }
 
   Future<void> authenticate(String msg, String did, String pk) async {
-    var message = await PolygonIdSdk.I.iden3comm.getIden3Message(message: msg);
-    await PolygonIdSdk.I.iden3comm.authenticate(
-      privateKey: pk,
-      genesisDid: did,
-      message: message,
-    );
+    await _lock.synchronized(() async {
+      var message = await PolygonIdSdk.I.iden3comm.getIden3Message(message: msg);
+      await PolygonIdSdk.I.iden3comm.authenticate(
+        privateKey: pk,
+        genesisDid: did,
+        message: message,
+      );
+    });
   }
 
   Future<List<CredentialEntity>> claimCredential(String message, String did, String pk) async {
-    var iden3message = await PolygonIdSdk.I.iden3comm.getIden3Message(message: message);
-    return await PolygonIdSdk.I.iden3comm.fetchAndSaveClaims(
-      message: iden3message as CredentialsOfferMessage,
-      genesisDid: did,
-      privateKey: pk,
-      profileNonce: BigInt.from(0),
-      keys: []
-    );
+    return _lock.synchronized(() async {
+      var iden3message = await PolygonIdSdk.I.iden3comm.getIden3Message(message: message);
+      return await PolygonIdSdk.I.iden3comm.fetchAndSaveClaims(
+        message: iden3message as CredentialsOfferMessage,
+        genesisDid: did,
+        privateKey: pk,
+        profileNonce: BigInt.from(0),
+        keys: []
+      );
+    });
   }
 
   Future<String> backupIdentity(String did, String pk) async {
-    return await PolygonIdSdk.I.identity.backupIdentity(
-      genesisDid: did,
-      privateKey: pk,
-    );
+    return _lock.synchronized(() async {
+      return await PolygonIdSdk.I.identity.backupIdentity(
+        genesisDid: did,
+        privateKey: pk,
+      );
+    });
   }
 
   Future<void> restoreIdentity(String backup, String did, String pk) async {
-    await PolygonIdSdk.I.identity.restoreIdentity(
-      genesisDid: did,
-      privateKey: pk,
-      encryptedDb: backup,
-    );
+    await _lock.synchronized(() async {
+      await PolygonIdSdk.I.identity.restoreIdentity(
+        genesisDid: did,
+        privateKey: pk,
+        encryptedDb: backup,
+      );
+    });
   }
 
   Future<List<CredentialEntity>> getCredentials(String did, String pk) async {
-    return await PolygonIdSdk.I.credential.getClaims(
-      genesisDid: did,
-      privateKey: pk,
-    );
+    return _lock.synchronized(() async {
+      return await PolygonIdSdk.I.credential.getClaims(
+        genesisDid: did,
+        privateKey: pk,
+      );
+    });
   }
 }

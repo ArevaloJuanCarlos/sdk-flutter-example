@@ -44,7 +44,7 @@ Future<dynamic> _handleCall(MethodCall call) async {
           circuits = CircuitsToDownloadParam.fromJson(map);
         }
 
-        final stream = _zkGenerator.downloadCircuits(circuits);
+        final stream = await _zkGenerator.downloadCircuits(circuits);
         _zkGenerator.handleDownloadInfo(stream, (status, info) {
           _channel.invokeMethod('downloadInfo', jsonEncode({'status': status, 'info': info}));
         });
